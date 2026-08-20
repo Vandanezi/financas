@@ -3,6 +3,7 @@
 <head>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<span id="sync" style="font-size:12px;opacity:.8;margin-right:8px"></span>
 <title>Controle Financeiro</title>
 <style>
 *{box-sizing:border-box;font-family:system-ui,Segoe UI,Arial,sans-serif}
@@ -256,7 +257,7 @@ function save(auto){
   if(auto!==false && sb){
     clearTimeout(timerPush);
     timerPush = setTimeout(push, 1500);
-    status('⏳ salvando...');
+    setStatus('⏳ salvando...');
   }
 }
 
@@ -272,27 +273,27 @@ async function sbUser(){
 }
 
 async function pull(silencioso){
-  if(!await sbUser()) return status('🔒 sem login');
-  status('⬇ baixando...');
+  if(!await sbUser()) return setStatus('🔒 sem login');
+  setStatus('⬇ baixando...');
   try{
     const { data, error } = await sb.from('dados').select('doc').maybeSingle();
     if(error) throw error;
     if(data?.doc && data.doc.ver) aplicarRemoto(data.doc);
     save(false);
-    status('☁️ ok');
+    setStatus('☁️ ok');
     if(!silencioso){ initMeses(); render(); }
-  }catch(e){ status('⚠️ offline'); console.error(e) }
+  }catch(e){ setStatus('⚠️ offline'); console.error(e) }
 }
 
 async function push(){
   const u = await sbUser();
-  if(!u) return status('🔒 sem login');
+  if(!u) return setStatus('🔒 sem login');
   try{
     const { error } = await sb.from('dados')
       .upsert({ user_id:u.id, doc:db, atualizado_em:new Date().toISOString() });
     if(error) throw error;
-    status('☁️ ok');
-  }catch(e){ status('⚠️ falha ao salvar'); console.error(e) }
+    setStatus('☁️ ok');
+  }catch(e){ setStatus('⚠️ falha ao salvar'); console.error(e) }
 }
 
 async function sincronizar(){ await pull() }
@@ -821,7 +822,7 @@ function recalcular(){
 function salvarNuvem(){
  function save(auto){
   try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
-  if(auto!==false){ clearTimeout(timerPush); timerPush=setTimeout(push,1500); status('⏳ salvando...'); }
+  if(auto!==false){ clearTimeout(timerPush); timerPush=setTimeout(push,1500); setStatus('⏳ salvando...'); }
 }
   cloud.token=document.getElementById('cl_tk').value.trim();
   cloud.rev=0; salvarCloud();
@@ -1054,10 +1055,10 @@ const SB_EMAIL = 'amanda-soldati@hotmail.com';   // ⚠️ troque pelo seu e-mai
 async function sbLogin(){
   if(await sbUser()) return pull();
   const senha = prompt('Senha da nuvem (mín. 6 caracteres):');
-  if(!senha) return status('🔒 sem login');
+  if(!senha) return setStatus('🔒 sem login');
   let { error } = await sb.auth.signInWithPassword({ email:SB_EMAIL, password:senha });
   if(error) ({ error } = await sb.auth.signUp({ email:SB_EMAIL, password:senha }));
-  if(error){ status('⚠️ login falhou'); return alert(error.message) }
+  if(error){ setStatus('⚠️ login falhou'); return alert(error.message) }
   document.getElementById('aviso').classList.add('hide');
   pull();
 }

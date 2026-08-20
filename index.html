@@ -82,7 +82,6 @@ label.chk{display:flex;align-items:center;gap:6px;font-size:13px}
 
 <script>
 /* ================= ARMAZENAMENTO ================= */
-const K='fin_v2', KC='fin_cloud';
 let LS=null;
 try{ localStorage.setItem('_t','1'); localStorage.removeItem('_t'); LS=localStorage }catch(e){}
 
@@ -248,9 +247,6 @@ function migrar(d){
 }
 db=migrar(db);
 
-try{ Object.assign(cloud, JSON.parse((LS&&LS.getItem(KC))||'{}')) }catch(e){}
-
-const salvarCloud=()=>{try{LS&&LS.setItem(KC,JSON.stringify(cloud))}catch(e){}};
 let timerPush=null;
 function save(auto){
   try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
@@ -309,7 +305,7 @@ function entrar(){
     document.getElementById('login').classList.add('hide');
     document.getElementById('app').classList.remove('hide');
     const av=document.getElementById('aviso');
-    if(!cloud.url){ av.innerHTML='☁️ Sincronização não configurada. Vá em <b>⚙️ Config</b> e cole o URL do Apps Script.'; av.classList.remove('hide') }
+    if(!sb){ av.innerHTML='☁️ Sincronização não configurada. Vá em <b>⚙️ Config</b> e cole o URL do Apps Script.'; av.classList.remove('hide') }
     initMeses(); render(); window.scrollTo(0,0);
 sbLogin();
   }catch(e){ msg.textContent='ERRO: '+e.message; console.error(e) }
@@ -777,15 +773,10 @@ function vCfg(){
    <small><b>Fecha dia 0</b> = pagamento imediato (PIX, dinheiro, boleto) → entra no mês da compra.<br>
    Compra <b>a partir</b> do dia de fechamento cai na fatura seguinte.</small></div>`;
 
-  return `<div class="card"><h3>☁️ Sincronização (Google Sheets)</h3>
-   <div class="grid">
-     <input id="cl_url" placeholder="URL do Apps Script (.../exec)" value="${cloud.url||''}">
-     <input id="cl_tk" placeholder="Token" value="${cloud.token||''}">
-   </div>
-   <p><button onclick="salvarNuvem()">Salvar e conectar</button>
-   <button class="sec" onclick="pull()">⬇ Baixar da nuvem</button>
-   <button class="sec" onclick="push(true)">⬆ Enviar (sobrescrever nuvem)</button></p>
-   <small>Versão atual: v${cloud.rev}. Use o <b>mesmo URL e token</b> nas duas máquinas.</small></div>`
+  return `<div class="card"><h3>☁️ Sincronização (Supabase)</h3>
+   <p><button class="sec" onclick="pull()">⬇ Baixar da nuvem</button>
+   <button class="sec" onclick="push()">⬆ Enviar agora</button></p>
+   <small>Os dados são salvos automaticamente ~1,5s após cada alteração.</small></div>`
   +lista('cats','Categorias')+cards+lista('pessoas','Pessoas')
   +`<div class="card"><h3>🔧 Recalcular faturas</h3>
     <p><button class="sec" onclick="recalcular()">Recalcular mês de pagamento de todos os gastos</button></p>
@@ -795,7 +786,9 @@ function vCfg(){
    <small>A senha é enviada para a nuvem na hora.</small>
    <p><button class="del" onclick="zerar()">Zerar todos os dados</button></p></div>`;
 }
+
 function editCartao(i,campo,v){ db.cartoes[i][campo]=+v||0; save() }
+
 function renomearCartao(i,novo){
   const antigo=db.cartoes[i].nome, n=(novo||'').trim();
   if(!n||n===antigo) return render();
@@ -804,13 +797,16 @@ function renomearCartao(i,novo){
   db.fixos.forEach(f=>{ if(f.cartao===antigo) f.cartao=n });
   save(); render();
 }
+
 function delCartao(i){ if(confirm('Excluir '+db.cartoes[i].nome+'?')){ db.cartoes.splice(i,1); save(); render() } }
+
 function addCartao(){
   const g=id=>document.getElementById(id);
   if(!g('nc_nome').value) return alert('Informe o nome');
   db.cartoes.push({nome:g('nc_nome').value.trim(),fech:+g('nc_fech').value||0,venc:+g('nc_venc').value||0});
   save(); render();
 }
+
 function recalcular(){
   if(!confirm('Recalcular o mês de pagamento de todos os gastos (exceto fixos)?')) return;
   db.lanc.filter(l=>!l.fixoId).forEach(l=>{
@@ -819,25 +815,18 @@ function recalcular(){
   });
   save(); initMeses(); render(); alert('Faturas recalculadas.');
 }
-function salvarNuvem(){
- function save(auto){
-  try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
-  if(auto!==false){ clearTimeout(timerPush); timerPush=setTimeout(push,1500); setStatus('⏳ salvando...'); }
-}
-  cloud.token=document.getElementById('cl_tk').value.trim();
-  cloud.rev=0; salvarCloud();
-  document.getElementById('aviso').classList.add('hide');
-  if(confirm('OK = BAIXAR os dados da nuvem\nCancelar = ENVIAR os dados desta máquina')) pull(); else push(true);
-}
-function addItem(k){const el=document.getElementById('n_'+k); if(el.value){db[k].push(el.value);save();render()}}
+
+function addItem(k){ const el=document.getElementById('n_'+k); if(el.value){ db[k].push(el.value); save(); render() } }
+
 function trocarSenha(){
   const el=document.getElementById('np');
   const nova=(el.value||'').trim();
   if(nova.length<4) return alert('Use pelo menos 4 caracteres.');
   db.senha=nova; save(false);
-  if(cloud.url) push(true);
+  if(sb) push();
   el.value=''; alert('Senha atualizada! Nova senha: '+nova);
 }
+
 function zerar(){ if(confirm('Apagar TUDO?')){ db=JSON.parse(JSON.stringify(vazio)); save(); initMeses(); render() } }
 
 /* ---------- BACKUP ---------- */

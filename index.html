@@ -259,6 +259,13 @@ function save(auto){
     timerPush = setTimeout(push, 1500);
     setStatus('⏳ salvando...');
   }
+function aplicarRemoto(dados){
+  if(!dados) return;
+  db = typeof dados === 'string' ? JSON.parse(dados) : dados;
+  try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
+  initMeses();
+  render();
+  setStatus('☁️ ok');
 }
 
 /* ================= NUVEM (Supabase) ================= */
@@ -309,7 +316,9 @@ function entrar(){
     document.getElementById('login').classList.add('hide');
     document.getElementById('app').classList.remove('hide');
     const av=document.getElementById('aviso');
-    if(!sb){ av.innerHTML='☁️ Sincronização não configurada. Vá em <b>⚙️ Config</b> e cole o URL do Apps Script.'; av.classList.remove('hide') }
+if(!sb) document.getElementById('aviso').classList.remove('hide');
+else document.getElementById('aviso').classList.add('hide');
+}
     initMeses(); render(); window.scrollTo(0,0);
 sbLogin();
   }catch(e){ msg.textContent='ERRO: '+e.message; console.error(e) }

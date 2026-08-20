@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Controle Financeiro</title>
 <style>
@@ -262,39 +263,43 @@ function aplicarRemoto(remoto){
   if(!db.senha) db.senha=senhaLocal;
 }
 
-/* ================= NUVEM ================= */
-async function pull(silencioso){
-  if(!cloud.url) return;
-  status('⬇ baixando...');
-  try{
-    const r=await fetch(cloud.url+'?token='+encodeURIComponent(cloud.token)+'&t='+Date.now());
-    const j=await r.json();
-    if(!j.ok) throw new Error(j.erro);
-    if(j.db) aplicarRemoto(j.db);
-    cloud.rev=j.rev; salvarCloud(); save(false);
-    status('☁️ ok (v'+j.rev+')');
-    if(!silencioso) initMeses(), render();
-  }catch(e){ status('⚠️ offline'); if(!silencioso) console.error(e) }
+/* ================= NUVEM (Supabase) ================= */
+const sb = window.supabase.createClient(
+  'https://hmoraatiwomoodxkiwaf.supabase.co',
+  'sb_publishable_c83_5y0-9Nr8EHDWSty2jA_X5D8vGnB'
+);
+
+async function sbUser(){
+  const { data:{ session } } = await sb.auth.getSession();
+  return session?.user || null;
 }
 
-async function push(force){
-  if(!cloud.url) return;
+async function pull(silencioso){
+  if(!await sbUser()) return status('🔒 sem login');
+  status('⬇ baixando...');
   try{
-    const r=await fetch(cloud.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({token:cloud.token,db:db,baseRev:cloud.rev,force:force===true})});
-    const j=await r.json();
-    if(!j.ok && j.erro==='conflito'){
-      if(confirm('A nuvem tem uma versão mais nova.\n\nOK = baixar a da nuvem (perde alterações locais)\nCancelar = enviar a sua por cima')){
-        aplicarRemoto(j.db);
-        cloud.rev=j.rev; salvarCloud(); save(false); initMeses(); render(); status('☁️ ok (v'+j.rev+')');
-      } else { cloud.rev=j.rev; return push(true) }
-      return;
-    }
-    if(!j.ok) throw new Error(j.erro);
-    cloud.rev=j.rev; salvarCloud(); status('☁️ ok (v'+j.rev+')');
+    const { data, error } = await sb.from('dados').select('doc').maybeSingle();
+    if(error) throw error;
+    if(data?.doc && data.doc.ver) aplicarRemoto(data.doc);
+    save(false);
+    status('☁️ ok');
+    if(!silencioso){ initMeses(); render(); }
+  }catch(e){ status('⚠️ offline'); console.error(e) }
+}
+
+async function push(){
+  const u = await sbUser();
+  if(!u) return status('🔒 sem login');
+  try{
+    const { error } = await sb.from('dados')
+      .upsert({ user_id:u.id, doc:db, atualizado_em:new Date().toISOString() });
+    if(error) throw error;
+    status('☁️ ok');
   }catch(e){ status('⚠️ falha ao salvar'); console.error(e) }
 }
-async function sincronizar(){ await pull(); }
+
+async function sincronizar(){ await pull() }
+
 
 /* ================= LOGIN ================= */
 function entrar(){
@@ -308,7 +313,7 @@ function entrar(){
     const av=document.getElementById('aviso');
     if(!cloud.url){ av.innerHTML='☁️ Sincronização não configurada. Vá em <b>⚙️ Config</b> e cole o URL do Apps Script.'; av.classList.remove('hide') }
     initMeses(); render(); window.scrollTo(0,0);
-    if(cloud.url) pull();
+sbLogin();
   }catch(e){ msg.textContent='ERRO: '+e.message; console.error(e) }
 }
 
@@ -817,7 +822,10 @@ function recalcular(){
   save(); initMeses(); render(); alert('Faturas recalculadas.');
 }
 function salvarNuvem(){
-  cloud.url=document.getElementById('cl_url').value.trim();
+ function save(auto){
+  try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
+  if(auto!==false){ clearTimeout(timerPush); timerPush=setTimeout(push,1500); status('⏳ salvando...'); }
+}
   cloud.token=document.getElementById('cl_tk').value.trim();
   cloud.rev=0; salvarCloud();
   document.getElementById('aviso').classList.add('hide');
@@ -1043,6 +1051,18 @@ function vAnalise(){
       `<tr><td>${p}</td><td>${brl(v)}</td><td>${(v/tot*100).toFixed(1)}%</td></tr>`).join('')||'<tr><td colspan="3"><small>—</small></td></tr>'}
     <tr><th>TOTAL</th><th>${brl(tot)}</th><th>100%</th></tr></table>
   </div>`;
+}
+
+const SB_EMAIL = 'amanda-soldati@hotmail.com';   // ⚠️ troque pelo seu e-mail real
+async function sbLogin(){
+  if(await sbUser()) return pull();
+  const senha = prompt('Senha da nuvem (mín. 6 caracteres):');
+  if(!senha) return status('🔒 sem login');
+  let { error } = await sb.auth.signInWithPassword({ email:SB_EMAIL, password:senha });
+  if(error) ({ error } = await sb.auth.signUp({ email:SB_EMAIL, password:senha }));
+  if(error){ status('⚠️ login falhou'); return alert(error.message) }
+  document.getElementById('aviso').classList.add('hide');
+  pull();
 }
 
 </script>

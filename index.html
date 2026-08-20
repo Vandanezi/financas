@@ -250,6 +250,7 @@ db=migrar(db);
 let timerPush=null;
 function save(auto){
   try{ LS&&LS.setItem(K,JSON.stringify(db)) }catch(e){}
+    // if(auto!==false && sb){ clearTimeout(timerPush); timerPush=setTimeout(push,1500); setStatus('⏳ salvando...'); }
   if(auto!==false && sb){
     clearTimeout(timerPush);
     timerPush = setTimeout(push, 1500);
